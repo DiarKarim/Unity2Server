@@ -33,6 +33,8 @@ public class SaveData : MonoBehaviour
 {
     public DataClass dataClass;
 
+    public bool threaded = true; 
+    
     public string path;
     private Coroutine saveDataCoroutine;
     private int trialNumber = 0;
@@ -78,7 +80,18 @@ public class SaveData : MonoBehaviour
         string jsonString = JsonConvert.SerializeObject(dataClass, Formatting.Indented);
 
         // Save the data to a file
-        File.WriteAllText(path + "/Data/" + dataClass.trialInfo + ".json", jsonString);
+        if(!threaded)
+        {
+            File.WriteAllText(path + "/Data/" + dataClass.trialInfo + ".json", jsonString);
+        }
+        else
+        {
+            // create new thread to save the data to a file (only operation that can be done in background)
+            new System.Threading.Thread(() =>
+            {
+                File.WriteAllText(path + "/Data/" + dataClass.trialInfo + ".json", jsonString);
+            }).Start();
+        }
 
         // Empty text fields for next trials (potential for issues with next trial)
         dataClass.ClearData();
