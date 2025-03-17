@@ -1,156 +1,89 @@
-﻿using Newtonsoft.Json;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
-
+using Newtonsoft.Json;
+using System.IO;
 [System.Serializable]
-public class DataClassing
+public class DataClass
 {
-    [SerializeField] public string conditionInfo = string.Empty;
-    [SerializeField] public string[] dataTable = new string[1001];
+    public string trialInfo;
+    public List<float> xPosition = new List<float>();
+    public List<float> yPosition = new List<float>();
+    public List<float> zPosition = new List<float>();
+    public List<float> xRotation = new List<float>();
+    public List<float> yRotation = new List<float>();
+    public List<float> zRotation = new List<float>();
+    public List<float> time = new List<float>();
+
+    public void ClearData()
+    {
+        xPosition.Clear();
+        yPosition.Clear();
+        zPosition.Clear();
+        xRotation.Clear();
+        yRotation.Clear();
+        zRotation.Clear();
+        time.Clear();
+    }
+
 }
 
-public class ServerDataUploader : MonoBehaviour
+
+public class SaveData : MonoBehaviour
 {
-    private DataClassing expData = new DataClassing();
+    public DataClass dataClass;
 
-    // Variables
-    #region
+    public string path;
+    private Coroutine saveDataCoroutine;
+    private int trialNumber = 0;
+    private float startTime;
+    private float elapsedTime = 0f;
 
-    public ExperimentState expState;
-    public GameObject[] Objects2Record;
-    public string setURL = "http://www.bhamxr.com:1234/JoesTaskJson_v1.php";
-
-    private List<string> recordDataList = new List<string>();
-
-    private float startTime = 0f;
-    private bool startOfTrial = false;
-    private int frameNum = 0;
-    private string conditionPost;
-    private string userIDPost;
-    private int trialnum = -1;
-    #endregion
-
-    private void Update()
+    void Start()
     {
-        // Test script 
-        if (Input.GetKeyDown(KeyCode.V))
+        startTime = Time.time;
+    }
+
+    void Update()
+    {
+
+        elapsedTime = Time.time - startTime;
+
+        // Get the position and rotation of the object
+        dataClass.xPosition.Add(transform.position.x);
+        dataClass.yPosition.Add(transform.position.y);
+        dataClass.zPosition.Add(transform.position.z);
+        dataClass.xRotation.Add(transform.rotation.x);
+        dataClass.yRotation.Add(transform.rotation.y);
+        dataClass.zRotation.Add(transform.rotation.z);
+        dataClass.time.Add(elapsedTime);
+
+        if(Input.GetKeyDown(KeyCode.S))
         {
-            string userIDPost = PlayerPrefs.GetString("userID") + "_" +
-                         PlayerPrefs.GetString("age") + "_" +
-                         PlayerPrefs.GetString("gender") + "_" +
-                         PlayerPrefs.GetString("hand");
-            
-            string groupCondition = "Reward";
-
-            conditionPost = "_" + groupCondition + "_" +
-                (expState.exPonent * 1000f).ToString("F0") + "_" +
-                expState.actualTrialNum.ToString("F0") + "_" +
-                (expState.dialGaining * 10).ToString("F0") + "_" +
-                 trialnum.ToString();
-
-            //trialNumPost = trialnum.ToString();
-
-            //if (expState.uploadData) // end of trial
-            //{
-            Debug.Log("Upload Command Sent!!!");
-            StartCoroutine(Upload2());
-
-            //    expState.uploadData = false;
-            //}
-        } 
-
-        if (expState.startTrial[0] == 1)
-        {
-            recordDataList.Clear();
-
-            trialnum++;
-            startOfTrial = true;
+            if(saveDataCoroutine != null)
+            {
+                StopCoroutine(saveDataCoroutine);
+            }
+            saveDataCoroutine = StartCoroutine(SaveFile());
+            trialNumber++;
             startTime = Time.time;
         }
     }
 
-    private void FixedUpdate()
-    {
-        /*---------------------------------------- Trial data collection start -------------------------------------------*/
-        #region
-        if (startOfTrial)
-        {
-            userIDPost = PlayerPrefs.GetString("userID") + "_" +
-                                PlayerPrefs.GetString("age") + "_" +
-                                PlayerPrefs.GetString("gender") + "_" +
-                                PlayerPrefs.GetString("hand");
 
-            string groupCondition = "";
-            if (expState.group == 0)
-            {
-                groupCondition = "NoReward";
-            }
-            else
-            {
-                groupCondition = "Reward";
-            }
-
-            conditionPost = "_" + groupCondition + "_" +
-                                 (expState.exPonent * 1000f).ToString("F0") + "_" +
-                                 (expState.dialGaining * 10).ToString("F0") + "_" +
-                                  expState.actualTrialNum.ToString("F0") + "_" +
-                                  trialnum.ToString();
-
-            frameNum = 0;
-            startTime = Time.time;
-            startOfTrial = false;
-        }
-
-        // Trial duration 
-        float currTime = Time.time - startTime;
-
-        foreach (GameObject obj in Objects2Record)
-        {
-            recordDataList.Add(frameNum.ToString() +";"+
-                               obj.name +";"+ 
-                               obj.transform.position.x.ToString("F3") +";"+
-                               obj.transform.position.y.ToString("F3") + ";" +
-                               obj.transform.position.z.ToString("F3") + ";" +
-                               obj.transform.localEulerAngles.x.ToString("F3") +";"+
-                               obj.transform.localEulerAngles.y.ToString("F3") + ";" +
-                               obj.transform.localEulerAngles.z.ToString("F3") + ";" +
-                               expState.score.ToString() +";"+
-                               currTime.ToString("F3")
-                               ); 
-        }
-        frameNum++;
-
-        #endregion
-        /*---------------------------------------- Trial data collection end ---------------------------------------------*/
-        if (expState.uploadData) // end of trial
-        {
-            StartCoroutine(Upload2());
-            expState.uploadData = false;
-        }
-    }
-
-    private IEnumerator Upload2()
+    private IEnumerator SaveFile()
     {
         // Convert to json and send to another site on the server
-        expData.conditionInfo = userIDPost + conditionPost;
-        expData.dataTable = recordDataList.ToArray();
+        dataClass.trialInfo = "Trial " + trialNumber.ToString();
+        string jsonString = JsonConvert.SerializeObject(dataClass, Formatting.Indented);
 
-        WWWForm form2 = new WWWForm();
-        string jsonString = JsonConvert.SerializeObject(expData, Formatting.Indented);
-        form2.AddField("postUserID", expData.conditionInfo);
-        form2.AddField("postJsonData", jsonString);
-
-        UnityWebRequest www2 = UnityWebRequest.Post(setURL, form2);
-        yield return www2.SendWebRequest();
-
-        if (www2.isNetworkError || www2.isHttpError)
-        {
-            Debug.Log(www2.error);
-        }
+        // Save the data to a file
+        File.WriteAllText(path + "/Data/" + dataClass.trialInfo + ".json", jsonString);
 
         // Empty text fields for next trials (potential for issues with next trial)
-        recordDataList.Clear();
+        dataClass.ClearData();
+
+        yield return null;
     }
+
 }
